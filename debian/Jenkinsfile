@@ -10,7 +10,9 @@ String[] architectures = [
 
 // Prefer stable arm64 agents; tulameen flaps offline mid-build
 // (InterruptedException → 5‑minute reconnect waits).
-String arm64NodeLabel = 'boys || fallgold'
+// Parallel docker.inside storms also kill dockerd on the Pi fleet —
+// see ensureDocker() + lock(docker-sock-*) below.
+String arm64NodeLabel = 'arm64 && !tulameen'
 
 String[] distributions = [
 			// 'debian:bullseye', // Disabled: EOL; vitexsoftware image may be gone.
@@ -145,6 +147,37 @@ def localBuildTreeRelease(Map t) {
         '''
     }
 }
+
+// Make sure dockerd is reachable; parallel .inside() on arm64 often races
+// the daemon into "Cannot connect to ... docker.sock".
+def ensureDocker() {
+    sh '''
+        set -eu
+        if docker info >/dev/null 2>&1; then
+            exit 0
+        fi
+        echo "Docker daemon not reachable on $(hostname) — attempting start..."
+        sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
+        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+            if docker info >/dev/null 2>&1; then
+                echo "Docker is up after ${i}s"
+                exit 0
+            fi
+            sleep 1
+        done
+        echo "Docker still down:" >&2
+        docker info >&2 || true
+        exit 1
+    '''
+}
+
+// Serialize container use per agent so we do not wedge dockerd.
+def withDockerContainer(image, String volumeArgs, Closure body) {
+    lock(resource: "docker-sock-${env.NODE_NAME}") {
+        ensureDocker()
+        image.inside(volumeArgs, body)
+    }
+}
 // --- end node-local workspace isolation -----------------------------------
 
 properties([
@@ -192,7 +225,8 @@ architectures.each { arch ->
             def artifacts = []
             def buildVer = ''
 
-            node(architecture) {
+            def nodeLabel = (architecture == 'arm64') ? arm64NodeLabel : architecture
+            node(nodeLabel) {
                 ansiColor('xterm') {
                     def root = nodeLocalRoot()
                     def buildId = localBuildId(distroCode, architecture)
@@ -217,10 +251,13 @@ architectures.each { arch ->
                                 ).trim()
                                 buildVer = version + '.' + env.BUILD_NUMBER + '~' + distroCode
                             }
-                            buildImage = docker.image(vendor + '/' + distroName)
+                            lock(resource: "docker-sock-${env.NODE_NAME}") {
+                                ensureDocker()
+                                buildImage = docker.image(vendor + '/' + distroName)
+                            }
                         }
                         stage('Build ' + branchName) {
-                            buildImage.inside('-v ' + t.base + ':' + t.base) {
+                            withDockerContainer(buildImage, '-v ' + t.base + ':' + t.base) {
                                 dir(t.tree) {
                                     def uniqueBuildId = buildId
                                     sh '''
@@ -259,7 +296,7 @@ architectures.each { arch ->
                         }
 
                         stage('Test ' + branchName) {
-                            buildImage.inside('-v ' + t.base + ':' + t.base) {
+                            withDockerContainer(buildImage, '-v ' + t.base + ':' + t.base) {
                                 dir(t.tree) {
                                     withEnv(["LB_OUT=${t.out}"]) {
                                         sh 'cd "$LB_OUT" ; dpkg-scanpackages . /dev/null > Packages; gzip -9c Packages > Packages.gz'
