@@ -1,0 +1,36 @@
+0.9.0 2009-11-21, Djordje Stanarevic <dstanarevic@yahoo.com>
+       * Implemented changes introduced to kernel since version 2.6.27
+       * Implemented V4L2 support , works well with camorama and amsn
+0.8.4 2008-12-31, Djordje Stanarevic <dstanarevic@yahoo.com>
+       * Applied changes introduced to kernel 2.6.27 for v4l
+0.8.3 2008-06-08, Djordje Stanarevic <dstanarevic@yahoo.com>
+       * Re-enabled frame capturing with epcam_read.Modified
+         README,INSTALL and Makefile
+0.8.2 2008-04-09, Djordje Stanarevic <dstanarevic@yahoo.com>
+       * Added sysfs support for 2.6.23 kernel and older
+
+0.8.1 2008-04-07, Djordje Stanarevic <dstanarevic@yahoo.com>
+	* Modified initial Jeroen's code. Made lots of improvements.
+	  http://ubuntuforums.org/showpost.php?p=4674587&postcount=57
+	* (NT: svn) added README info from ubuntuforums (see above)
+
+0.7.3 .........., Fabio Mauro (?)
+	* More modifications for kernel version compatibility, reporting success in 
+	  "Ubuntu 7.04 on a 2.6.20 kernel, but the FPS is about 0.5"
+	  http://ubuntuforums.org/showpost.php?p=2626919&postcount=29
+	* Added EndPoints EP800 docs
+	* According to the diff, this revision has received patches from Antoine DEBOURG
+
+0.7.2 .........., Fabio Mauro (?)
+	* Modifications by Favio Mauro (?) to compile under Ubuntu Edgy Eft
+	* (NT: svn) added INSTALL with simple instructions, copied from:
+	  http://ubuntuforums.org/showpost.php?p=1932186&postcount=19
+
+0.7.1 2006-..-.., Fabio Mauro
+	* Modifications by Fabio Mauro to allow compiling under Ubuntu
+
+0.7.0 2004-12-04, Nuno Tavares <nunotavares@hotmail.com>
+	* Initial release, just an independent module tree 
+	  based on the 2.6.1-rxq3 patch from Jeroen:
+	  http://members.brabant.chello.nl/~j.vreeken/se401/
+

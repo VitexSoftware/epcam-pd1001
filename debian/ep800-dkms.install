@@ -1,0 +1,3 @@
+ep800.c  usr/src/${env:DEB_SOURCE}-${env:DEB_VERSION_UPSTREAM}
+ep800.h  usr/src/${env:DEB_SOURCE}-${env:DEB_VERSION_UPSTREAM}
+Makefile usr/src/${env:DEB_SOURCE}-${env:DEB_VERSION_UPSTREAM}

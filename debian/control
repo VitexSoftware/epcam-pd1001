@@ -1,0 +1,27 @@
+Source: ep800
+Section: kernel
+Priority: optional
+Maintainer: Vítězslav Dvořák <info@vitexsoftware.cz>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-dkms,
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/Vitexus/epcam-pd1001
+Vcs-Git: https://github.com/Vitexus/epcam-pd1001.git
+Vcs-Browser: https://github.com/Vitexus/epcam-pd1001
+
+Package: ep800-dkms
+Architecture: all
+Depends:
+ dkms,
+ ${misc:Depends},
+Description: EP800 / Creative PD1001 USB webcam driver (DKMS)
+ Out-of-tree V4L2 driver for Endpoints EP800 based cameras, notably the
+ Creative Webcam PD1001 (USB ID 041e:400d).
+ .
+ The module is rebuilt automatically via DKMS whenever a new kernel is
+ installed.
+ .
+ Protocol and EPLite/Bayer decoding are based on the historical epcam
+ driver (GPLv2+).

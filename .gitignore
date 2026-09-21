@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Build products
+*.o
+*.ko
+*.ko.xz
+*.mod
+*.mod.c
+.*.cmd
+Module.symvers
+modules.order
+.tmp_versions/
+.cache.mk
+
+# Debian packaging artifacts
+debian/.debhelper/
+debian/ep800-dkms/
+debian/files
+debian/*.debhelper*
+debian/*.substvars
+debian/debhelper-build-stamp
+../ep800_*.buildinfo
+../ep800_*.changes
+../ep800-dkms_*.deb
+*.deb
+*.buildinfo
+*.changes
+*.dsc
+*.tar.xz
+*.tar.gz
+
+# Editor / OS
+*~
+*.swp
+.DS_Store
+.idea/
+.vscode/
+
+# Local VM images
+docs/*.qcow2
+scripts/*.qcow2
+*.qcow2
+seed.img

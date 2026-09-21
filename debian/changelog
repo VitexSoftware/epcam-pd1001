@@ -1,0 +1,25 @@
+ep800 (1.0.3-1) unstable; urgency=medium
+
+  * Fix disconnect vs vb2 release deadlock (VLC/Ctrl+C hang, D-state unbind).
+  * Defer workqueue cancel; null udev so I/O fails fast on unplug.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 18:40:00 +0200
+
+ep800 (1.0.2-1) unstable; urgency=medium
+
+  * Decode frames in a workqueue instead of USB URB softirq (host freeze).
+  * Keep V4L2 input/parm ioctls for VLC/FFmpeg compatibility.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 18:20:00 +0200
+
+ep800 (1.0.1-1) unstable; urgency=medium
+
+  * Add V4L2 input and parm ioctls so VLC/FFmpeg can open the device.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 18:10:00 +0200
+
+ep800 (1.0.0-1) unstable; urgency=medium
+
+  * Initial Debian DKMS package for the modern EP800 / PD1001 driver.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 18:05:00 +0200
