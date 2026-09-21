@@ -1,3 +1,22 @@
+ep800 (1.0.6-1) unstable; urgency=medium
+
+  * Expose snapshot button as KEY_CAMERA via interrupt endpoint input device.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 20:05:00 +0200
+
+ep800 (1.0.5-1) unstable; urgency=medium
+
+  * Fix blue skin: drop erroneous R↔B swap; Bayer buffer is already BGR24.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 19:12:00 +0200
+
+ep800 (1.0.4-1) unstable; urgency=medium
+
+  * Fix decode_bayer oops: cancel decode work before freeing rgb; bounds checks.
+  * Use vb2 wait_prepare/finish around cancel_work_sync in stop_streaming.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 19:05:00 +0200
+
 ep800 (1.0.3-1) unstable; urgency=medium
 
   * Fix disconnect vs vb2 release deadlock (VLC/Ctrl+C hang, D-state unbind).

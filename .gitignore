@@ -40,3 +40,8 @@ docs/*.qcow2
 scripts/*.qcow2
 *.qcow2
 seed.img
+
+# Full-resolution product photos kept locally (README uses docs/images/*)
+/PD1001.png
+/PD1001.jpg
+/JR012.webp

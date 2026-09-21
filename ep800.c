@@ -13,6 +13,8 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
+#include <linux/usb/input.h>
+#include <linux/input.h>
 #include <linux/mutex.h>
 #include <linux/spinlock.h>
 #include <linux/vmalloc.h>
@@ -30,7 +32,7 @@
 MODULE_AUTHOR("Port based on epcam by Jeroen Vreeken et al.");
 MODULE_DESCRIPTION("Endpoints EP800 / Creative PD1001 USB camera");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("1.0.3");
+MODULE_VERSION("1.0.6");
 
 static int video_nr = -1;
 module_param(video_nr, int, 0644);
@@ -122,6 +124,13 @@ struct ep800 {
 	u16 rgain;
 	u16 ggain;
 	u16 bgain;
+
+	/* snapshot button via interrupt endpoint (vendor, not HID) */
+	struct input_dev *input;
+	struct urb *button_urb;
+	u8 *button_buf;
+	size_t button_buf_len;
+	char input_phys[64];
 };
 
 struct ep800_buffer {
@@ -326,11 +335,18 @@ static void decode_bayer(struct ep800 *dev, u8 *data, int len)
 {
 	int datasize = dev->width * dev->height;
 	u8 *framedata = dev->rgb;
+	u8 *frame_end;
 	u8 *curline, *nextline;
 	int width = dev->width;
 	int blineoffset = 0, bline;
 	int linelength = width * 3;
 	int i;
+
+	/* Guard against stop_streaming freeing rgb while work runs. */
+	if (!framedata || !dev->streaming)
+		return;
+
+	frame_end = framedata + datasize * 3;
 
 	if (dev->curpix + len > datasize)
 		len = datasize - dev->curpix;
@@ -348,8 +364,10 @@ static void decode_bayer(struct ep800 *dev, u8 *data, int len)
 	bline = dev->curpix / width + blineoffset;
 
 	curline = dev->curline;
+	if (!curline || curline < framedata || curline >= frame_end)
+		curline = framedata + linelength * 2;
 	nextline = curline + linelength;
-	if (nextline >= framedata + datasize * 3)
+	if (nextline >= frame_end)
 		nextline = curline;
 
 	while (len) {
@@ -358,7 +376,7 @@ static void decode_bayer(struct ep800 *dev, u8 *data, int len)
 			bline = dev->curpix / width + blineoffset;
 			curline += linelength * 2;
 			nextline += linelength * 2;
-			if (curline >= framedata + datasize * 3) {
+			if (curline >= frame_end) {
 				dev->curlinepix++;
 				curline -= 3;
 				nextline -= 3;
@@ -366,32 +384,40 @@ static void decode_bayer(struct ep800 *dev, u8 *data, int len)
 				data++;
 				dev->curpix++;
 			}
-			if (nextline >= framedata + datasize * 3)
+			if (nextline >= frame_end)
 				nextline = curline;
 		}
-		if (bline & 1) {
-			if (dev->curlinepix & 1) {
-				*(curline + 2) = *data;
-				*(curline - 1) = *data;
-				*(nextline + 2) = *data;
-				*(nextline - 1) = *data;
+		/* Edge writes use curline-1/-2/-3; skip if outside buffer. */
+		if (curline >= framedata + 3 && curline + 2 < frame_end &&
+		    nextline >= framedata + 3 && nextline + 2 < frame_end) {
+			if (bline & 1) {
+				if (dev->curlinepix & 1) {
+					*(curline + 2) = *data;
+					*(curline - 1) = *data;
+					*(nextline + 2) = *data;
+					*(nextline - 1) = *data;
+				} else {
+					*(curline + 1) =
+						(*(curline + 1) + *data) / 2;
+					*(curline - 2) =
+						(*(curline - 2) + *data) / 2;
+					*(nextline + 1) = *data;
+					*(nextline - 2) = *data;
+				}
 			} else {
-				*(curline + 1) = (*(curline + 1) + *data) / 2;
-				*(curline - 2) = (*(curline - 2) + *data) / 2;
-				*(nextline + 1) = *data;
-				*(nextline - 2) = *data;
-			}
-		} else {
-			if (dev->curlinepix & 1) {
-				*(curline + 1) = (*(curline + 1) + *data) / 2;
-				*(curline - 2) = (*(curline - 2) + *data) / 2;
-				*(nextline + 1) = *data;
-				*(nextline - 2) = *data;
-			} else {
-				*curline = *data;
-				*(curline - 3) = *data;
-				*nextline = *data;
-				*(nextline - 3) = *data;
+				if (dev->curlinepix & 1) {
+					*(curline + 1) =
+						(*(curline + 1) + *data) / 2;
+					*(curline - 2) =
+						(*(curline - 2) + *data) / 2;
+					*(nextline + 1) = *data;
+					*(nextline - 2) = *data;
+				} else {
+					*curline = *data;
+					*(curline - 3) = *data;
+					*nextline = *data;
+					*(nextline - 3) = *data;
+				}
 			}
 		}
 		dev->curlinepix++;
@@ -406,33 +432,39 @@ static void decode_bayer(struct ep800 *dev, u8 *data, int len)
 	if (dev->curpix < datasize)
 		return;
 
+	if (!dev->rgb || !dev->streaming)
+		return;
+
 	/* border fixups from epcam */
-	framedata += linelength * 2;
+	framedata = dev->rgb + linelength * 2;
 	for (i = 0; i < linelength * 2; i++) {
 		framedata--;
-		*framedata = *(framedata + linelength);
+		if (framedata >= dev->rgb &&
+		    framedata + linelength < frame_end)
+			*framedata = *(framedata + linelength);
 	}
 	for (i = 0; i < dev->height; i++) {
-		*framedata = *(framedata + 3);
-		*(framedata + 1) = *(framedata + 4);
-		*(framedata + 2) = *(framedata + 5);
+		if (framedata + 5 < frame_end) {
+			*framedata = *(framedata + 3);
+			*(framedata + 1) = *(framedata + 4);
+			*(framedata + 2) = *(framedata + 5);
+		}
 		framedata += linelength;
+		if (framedata >= frame_end)
+			break;
 	}
 	framedata -= linelength * 2;
 	for (i = 0; i < linelength * 2; i++) {
 		framedata++;
-		*framedata = *(framedata - linelength);
+		if (framedata < frame_end && framedata >= dev->rgb + linelength)
+			*framedata = *(framedata - linelength);
 	}
 
-	/* RGB -> BGR for V4L2_PIX_FMT_BGR24 */
-	{
-		u8 *p = dev->rgb;
-		int n = datasize * 3;
-
-		for (i = 0; i < n; i += 3)
-			swap(p[i], p[i + 2]);
-	}
-
+	/*
+	 * Demosaic writes component 0/1/2 in sensor order. On PD1001 that is
+	 * already B,G,R in memory (legacy epcam BGRon=0), matching BGR24.
+	 * Do not R↔B swap here — that turns skin blue in ffplay/VLC.
+	 */
 	ep800_frame_done(dev);
 	dev->curpix = 0;
 }
@@ -702,6 +734,169 @@ fail:
 	return -ENOMEM;
 }
 
+/* ------------------------------------------------------------------ */
+/* Snapshot button (interrupt EP 0x82 → KEY_CAMERA)                     */
+/* ------------------------------------------------------------------ */
+
+static int ep800_button_interval(struct ep800 *dev)
+{
+	struct usb_host_interface *alt = dev->intf->cur_altsetting;
+	int i;
+
+	for (i = 0; i < alt->desc.bNumEndpoints; i++) {
+		struct usb_endpoint_descriptor *ep = &alt->endpoint[i].desc;
+
+		if (usb_endpoint_is_int_in(ep) &&
+		    usb_endpoint_num(ep) == EP800_BUTTON_ENDPOINT)
+			return max_t(int, 1, ep->bInterval);
+	}
+	return 8;
+}
+
+static void ep800_button_irq(struct urb *urb)
+{
+	struct ep800 *dev = urb->context;
+	int status = urb->status;
+	int i;
+	bool pressed = false;
+
+	switch (status) {
+	case 0:
+		break;
+	case -ECONNRESET:
+	case -ENOENT:
+	case -ESHUTDOWN:
+		/* unlinked — stream alt change or disconnect */
+		return;
+	default:
+		goto resubmit;
+	}
+
+	/* Legacy epcam: length >= 2 and non-zero payload → click. */
+	if (urb->actual_length >= 2 && dev->input && dev->button_buf) {
+		for (i = 0; i < urb->actual_length; i++) {
+			if (dev->button_buf[i]) {
+				pressed = true;
+				break;
+			}
+		}
+		if (pressed) {
+			input_report_key(dev->input, KEY_CAMERA, 1);
+			input_sync(dev->input);
+			input_report_key(dev->input, KEY_CAMERA, 0);
+			input_sync(dev->input);
+			ep_dbg(dev, "snapshot button\n");
+		}
+	}
+
+resubmit:
+	if (!dev->udev)
+		return;
+	status = usb_submit_urb(urb, GFP_ATOMIC);
+	if (status)
+		ep_dbg(dev, "button urb resubmit failed: %d\n", status);
+}
+
+static void ep800_button_stop(struct ep800 *dev)
+{
+	if (dev->button_urb)
+		usb_kill_urb(dev->button_urb);
+}
+
+static int ep800_button_start(struct ep800 *dev)
+{
+	int interval;
+	int ret;
+
+	if (!dev->udev || !dev->button_urb || !dev->button_buf)
+		return -ENODEV;
+
+	ep800_button_stop(dev);
+	interval = ep800_button_interval(dev);
+	usb_fill_int_urb(dev->button_urb, dev->udev,
+			 usb_rcvintpipe(dev->udev, EP800_BUTTON_ENDPOINT),
+			 dev->button_buf, dev->button_buf_len,
+			 ep800_button_irq, dev, interval);
+	ret = usb_submit_urb(dev->button_urb, GFP_KERNEL);
+	if (ret)
+		dev_warn(&dev->intf->dev,
+			 "button urb submit failed: %d\n", ret);
+	return ret;
+}
+
+static void ep800_button_free(struct ep800 *dev)
+{
+	ep800_button_stop(dev);
+	if (dev->input) {
+		input_unregister_device(dev->input);
+		dev->input = NULL;
+	}
+	if (dev->button_urb) {
+		usb_free_urb(dev->button_urb);
+		dev->button_urb = NULL;
+	}
+	kfree(dev->button_buf);
+	dev->button_buf = NULL;
+}
+
+static int ep800_button_init(struct ep800 *dev)
+{
+	struct input_dev *input;
+	int ret;
+
+	dev->button_buf_len = 64;
+	dev->button_buf = kmalloc(dev->button_buf_len, GFP_KERNEL);
+	if (!dev->button_buf)
+		return -ENOMEM;
+
+	dev->button_urb = usb_alloc_urb(0, GFP_KERNEL);
+	if (!dev->button_urb) {
+		ret = -ENOMEM;
+		goto err_buf;
+	}
+
+	input = input_allocate_device();
+	if (!input) {
+		ret = -ENOMEM;
+		goto err_urb;
+	}
+
+	usb_make_path(dev->udev, dev->input_phys, sizeof(dev->input_phys));
+	strlcat(dev->input_phys, "/button", sizeof(dev->input_phys));
+
+	input->name = "Creative PD1001 Button";
+	input->phys = dev->input_phys;
+	usb_to_input_id(dev->udev, &input->id);
+	input->dev.parent = &dev->intf->dev;
+	input->evbit[0] = BIT_MASK(EV_KEY);
+	set_bit(KEY_CAMERA, input->keybit);
+
+	ret = input_register_device(input);
+	if (ret)
+		goto err_input;
+
+	dev->input = input;
+	ret = ep800_button_start(dev);
+	if (ret)
+		dev_warn(&dev->intf->dev,
+			 "snapshot button not available (%d)\n", ret);
+	else
+		dev_info(&dev->intf->dev,
+			 "snapshot button → KEY_CAMERA on %s\n",
+			 dev->input_phys);
+	return 0;
+
+err_input:
+	input_free_device(input);
+err_urb:
+	usb_free_urb(dev->button_urb);
+	dev->button_urb = NULL;
+err_buf:
+	kfree(dev->button_buf);
+	dev->button_buf = NULL;
+	return ret;
+}
+
 static int ep800_start_stream(struct ep800 *dev)
 {
 	struct usb_host_interface *alt;
@@ -716,6 +911,8 @@ static int ep800_start_stream(struct ep800 *dev)
 			EP800_ISO_ALTSETTING, ret);
 		return ret;
 	}
+	/* set_interface unlinks the button URB — restart on new alt. */
+	ep800_button_start(dev);
 
 	alt = &dev->intf->altsetting[EP800_ISO_ALTSETTING];
 	dev->packetsize =
@@ -755,6 +952,7 @@ static int ep800_start_stream(struct ep800 *dev)
 		ep800_ctrl(dev, true, EP800_VENDOR_REQ_LED_CONTROL, 0, NULL, 0);
 		ep800_ctrl(dev, true, EP800_VENDOR_REQ_CAM_POWER, 0, NULL, 0);
 		usb_set_interface(dev->udev, dev->iface, 0);
+		ep800_button_start(dev);
 		return ret;
 	}
 
@@ -769,9 +967,7 @@ static void ep800_stop_stream(struct ep800 *dev)
 		return;
 
 	dev->streaming = false;
-	/* Kill URBs first. Do not cancel_work_sync here under vb2 lock —
-	 * disconnect may be waiting on the same lock; flush work after unlock
-	 * in the caller when needed. Just prevent further decode. */
+	/* Kill URBs only while caller may hold the vb2 lock. */
 	ep800_free_urbs(dev);
 
 	if (dev->udev) {
@@ -779,10 +975,8 @@ static void ep800_stop_stream(struct ep800 *dev)
 		ep800_ctrl(dev, true, EP800_VENDOR_REQ_LED_CONTROL, 0, NULL, 0);
 		ep800_ctrl(dev, true, EP800_VENDOR_REQ_CAM_POWER, 0, NULL, 0);
 		usb_set_interface(dev->udev, dev->iface, 0);
+		ep800_button_start(dev);
 	}
-
-	vfree(dev->rgb);
-	dev->rgb = NULL;
 	ep_dbg(dev, "streaming stopped\n");
 }
 
@@ -854,6 +1048,14 @@ static void ep800_stop_streaming(struct vb2_queue *vq)
 
 	ep800_stop_stream(dev);
 	ep800_return_buffers(dev, VB2_BUF_STATE_ERROR);
+
+	/* Drop queue lock so cancel_work_sync cannot deadlock with disconnect. */
+	vb2_ops_wait_prepare(vq);
+	cancel_work_sync(&dev->decode_work);
+	vfree(dev->rgb);
+	dev->rgb = NULL;
+	dev->curline = NULL;
+	vb2_ops_wait_finish(vq);
 }
 
 static const struct vb2_ops ep800_vb2_ops = {
@@ -1293,6 +1495,10 @@ static int ep800_probe(struct usb_interface *intf,
 	if (ret)
 		goto err_vdev;
 
+	ret = ep800_button_init(dev);
+	if (ret)
+		goto err_unreg;
+
 	usb_set_intfdata(intf, dev);
 	/* Extra ref: dropped in disconnect after unregister. */
 	v4l2_device_get(&dev->v4l2_dev);
@@ -1300,8 +1506,12 @@ static int ep800_probe(struct usb_interface *intf,
 		 video_device_node_name(vdev));
 	return 0;
 
+err_unreg:
+	video_unregister_device(vdev);
+	vdev = NULL;
 err_vdev:
-	video_device_release(vdev);
+	if (vdev)
+		video_device_release(vdev);
 err_ctrl:
 	v4l2_ctrl_handler_free(&dev->ctrl_handler);
 err_v4l2:
@@ -1336,6 +1546,7 @@ static void ep800_disconnect(struct usb_interface *intf)
 	v4l2_device_disconnect(&dev->v4l2_dev);
 	mutex_unlock(&dev->lock);
 
+	ep800_button_free(dev);
 	ep800_free_urbs(dev);
 	cancel_work_sync(&dev->decode_work);
 

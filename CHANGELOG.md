@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.6 — 2026-09-21
+
+- Snapshot button on interrupt EP 0x82 → Linux input `KEY_CAMERA` (not HID).
+
+## 1.0.5 — 2026-09-21
+
+- Fix blue skin / R↔B swap: demosaic output is already BGR24 (match legacy `BGRon=0`).
+
+## 1.0.4 — 2026-09-21
+
+- Fix `decode_bayer` kernel oops (workqueue raced with freeing the RGB buffer).
+- Bounds-check demosaic writes; flush decode work via vb2 wait_prepare/finish.
+
 ## 1.0.3 — 2026-09-21
 
 - Fix disconnect vs vb2 release deadlock (VLC hang / Ctrl+C ignored / D-state unbind).
