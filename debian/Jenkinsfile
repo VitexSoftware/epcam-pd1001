@@ -194,19 +194,29 @@ architectures.each { arch ->
                     def t = null
                     try {
                         stage('Checkout ' + branchName) {
+                            // Seed mirror on *this* agent via Jenkins credentials
+                            // (raw git@github.com SSH often lacks known_hosts on agents).
+                            ws(bootstrapWs(root)) {
+                                def sv = checkout scm
+                                seedNodeMirror(root, sv.GIT_URL, gitCommit, pwd())
+                            }
                             t = localBuildTree(root, gitUrl, gitCommit, buildId)
                             echo "Node-local build tree: ${t.tree} (node ${env.NODE_NAME} arch ${architecture})"
+                            // Reset changelog on the host — gitdir points at the mirror
+                            // outside t.base, so git must not run inside the container.
+                            dir(t.tree) {
+                                sh 'git checkout debian/changelog'
+                                def version = sh(
+                                    script: 'dpkg-parsechangelog --show-field Version',
+                                    returnStdout: true
+                                ).trim()
+                                buildVer = version + '.' + env.BUILD_NUMBER + '~' + distroCode
+                            }
                             buildImage = docker.image(vendor + '/' + distroName)
                         }
                         stage('Build ' + branchName) {
                             buildImage.inside('-v ' + t.base + ':' + t.base) {
                                 dir(t.tree) {
-                                    sh 'git checkout debian/changelog'
-                                    def version = sh(
-                                        script: 'dpkg-parsechangelog --show-field Version',
-                                        returnStdout: true
-                                    ).trim()
-                                    buildVer = version + '.' + env.BUILD_NUMBER + '~' + distroCode
                                     def uniqueBuildId = buildId
                                     sh '''
                                         export DH_INTERNAL_BUILDDIR="/tmp/debhelper-build-''' + uniqueBuildId + '''"
