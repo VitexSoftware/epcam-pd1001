@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 Vítězslav Dvořák <info@vitexsoftware.cz> -->
+<component type="driver">
+  <id>cz.vitexsoftware.ep800</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-2.0-or-later</project_license>
+  <name>EP800 Webcam Driver</name>
+  <summary>V4L2 driver for Creative Webcam PD1001 / Endpoints EP800 cameras</summary>
+  <description>
+    <p>
+      Out-of-tree Linux V4L2 driver for Endpoints EP800 USB cameras, including
+      the Creative Webcam PD1001 (USB ID 041e:400d). Provides a
+      <code>/dev/video*</code> capture device and exposes the camera shutter
+      button as a <code>KEY_CAMERA</code> input event.
+    </p>
+    <p>
+      The module is shipped as a DKMS package so it rebuilds automatically for
+      new kernels. Capture runs at a few frames per second on Full-Speed USB;
+      colour and exposure controls are available but rough.
+    </p>
+  </description>
+  <icon type="stock">ep800</icon>
+  <categories>
+    <category>HardwareSettings</category>
+    <category>System</category>
+  </categories>
+  <url type="homepage">https://github.com/VitexSoftware/epcam-pd1001</url>
+  <url type="bugtracker">https://github.com/VitexSoftware/epcam-pd1001/issues</url>
+  <developer id="cz.vitexsoftware">
+    <name>Vítězslav Dvořák</name>
+  </developer>
+  <provides>
+    <modalias>usb:v041Ep400D*</modalias>
+    <modalias>usb:v03E8p1005*</modalias>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.7" date="2026-09-21"/>
+  </releases>
+</component>

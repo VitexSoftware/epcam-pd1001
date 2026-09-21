@@ -32,7 +32,7 @@
 MODULE_AUTHOR("Port based on epcam by Jeroen Vreeken et al.");
 MODULE_DESCRIPTION("Endpoints EP800 / Creative PD1001 USB camera");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("1.0.6");
+MODULE_VERSION("1.0.7");
 
 static int video_nr = -1;
 module_param(video_nr, int, 0644);

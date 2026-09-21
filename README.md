@@ -127,6 +127,8 @@ dkms.conf           DKMS recipe
 debian/             Debian packaging (ep800-dkms)
 docs/               documentation and screenshots
 docs/images/        PD1001 / JR012 photos + VLC preview
+icons/hicolor/      AppStream stock icon `ep800` (PNG sizes)
+metainfo/           AppStream driver metadata
 scripts/            helper scripts
 legacy/epcam-0.9/   historical epcam 0.9 sources (reference only)
 ```

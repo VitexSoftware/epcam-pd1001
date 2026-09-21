@@ -7,9 +7,9 @@ Build-Depends:
  dh-sequence-dkms,
 Standards-Version: 4.7.2
 Rules-Requires-Root: no
-Homepage: https://github.com/Vitexus/epcam-pd1001
-Vcs-Git: https://github.com/Vitexus/epcam-pd1001.git
-Vcs-Browser: https://github.com/Vitexus/epcam-pd1001
+Homepage: https://github.com/VitexSoftware/epcam-pd1001
+Vcs-Git: https://github.com/VitexSoftware/epcam-pd1001.git
+Vcs-Browser: https://github.com/VitexSoftware/epcam-pd1001
 
 Package: ep800-dkms
 Architecture: all

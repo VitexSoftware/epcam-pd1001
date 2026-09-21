@@ -1,3 +1,10 @@
+ep800 (1.0.7-1) unstable; urgency=medium
+
+  * Add AppStream driver metainfo and hicolor stock icon (ep800).
+  * Point packaging Vcs/Homepage at VitexSoftware/epcam-pd1001.
+
+ -- Vítězslav Dvořák <info@vitexsoftware.cz>  Mon, 21 Sep 2026 20:20:00 +0200
+
 ep800 (1.0.6-1) unstable; urgency=medium
 
   * Expose snapshot button as KEY_CAMERA via interrupt endpoint input device.

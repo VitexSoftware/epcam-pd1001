@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.7 — 2026-09-21
+
+- AppStream driver metainfo (`cz.vitexsoftware.ep800`) with stock icon `ep800`.
+- Install hicolor icons generated from the VLC preview screenshot.
+
 ## 1.0.6 — 2026-09-21
 
 - Snapshot button on interrupt EP 0x82 → Linux input `KEY_CAMERA` (not HID).
