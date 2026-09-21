@@ -69,7 +69,8 @@ def bootstrapWs(String root) {
 }
 
 def seedNodeMirror(String root, String gitUrl, String gitCommit, String seedDir = '') {
-    def slug   = gitUrl.replaceAll(/[^A-Za-z0-9._-]/, '_')
+    // Avoid .../repo.git.git when GIT_URL already ends in .git
+    def slug   = gitUrl.replaceAll(/\.git$/, '').replaceAll(/[^A-Za-z0-9._-]/, '_')
     def mirror = root + '/ref/' + slug + '.git'
     withEnv(["LB_ROOT=${root}", "LB_MIRROR=${mirror}", "LB_URL=${gitUrl}",
              "LB_SHA=${gitCommit}", "LB_SEED=${seedDir}"]) {
@@ -153,13 +154,18 @@ properties([
 ])
 
 def scmVars = [:]
-node('amd64') {
-    ansiColor('xterm') {
-        stage('SCM Checkout') {
-            def root = nodeLocalRoot()
-            ws(bootstrapWs(root)) {
-                scmVars = checkout scm
-                seedNodeMirror(root, scmVars.GIT_URL, scmVars.GIT_COMMIT, pwd())
+// Seed the node-local mirror on every arch we build on. Parallel branches on
+// arm64 cannot reuse the amd64 checkout, and a fresh git@github.com clone
+// fails when the agent lacks github.com in known_hosts / deploy key.
+['amd64', 'arm64'].each { archLabel ->
+    node(archLabel) {
+        ansiColor('xterm') {
+            stage('SCM Checkout ' + archLabel) {
+                def root = nodeLocalRoot()
+                ws(bootstrapWs(root)) {
+                    scmVars = checkout scm
+                    seedNodeMirror(root, scmVars.GIT_URL, scmVars.GIT_COMMIT, pwd())
+                }
             }
         }
     }
