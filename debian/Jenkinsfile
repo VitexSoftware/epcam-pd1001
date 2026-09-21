@@ -149,24 +149,31 @@ def localBuildTreeRelease(Map t) {
 }
 
 // Make sure dockerd is reachable; parallel .inside() on arm64 often races
-// the daemon into "Cannot connect to ... docker.sock".
+// the daemon into "Cannot connect to ... docker.sock". Prefer restart over
+// start — a wedged unit with a stale socket ignores start.
 def ensureDocker() {
     sh '''
         set -eu
         if docker info >/dev/null 2>&1; then
             exit 0
         fi
-        echo "Docker daemon not reachable on $(hostname) — attempting start..."
-        sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
-        for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        echo "Docker daemon not reachable on $(hostname) — attempting restart..."
+        sudo systemctl reset-failed docker 2>/dev/null || true
+        sudo systemctl restart docker 2>/dev/null \
+            || sudo service docker restart 2>/dev/null \
+            || sudo systemctl start docker 2>/dev/null \
+            || true
+        for i in $(seq 1 45); do
             if docker info >/dev/null 2>&1; then
                 echo "Docker is up after ${i}s"
                 exit 0
             fi
             sleep 1
         done
-        echo "Docker still down:" >&2
+        echo "Docker still down on $(hostname):" >&2
         docker info >&2 || true
+        sudo systemctl status docker --no-pager >&2 || true
+        sudo journalctl -u docker -n 40 --no-pager >&2 || true
         exit 1
     '''
 }
