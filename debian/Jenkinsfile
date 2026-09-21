@@ -8,6 +8,10 @@ String[] architectures = [
 			'arm64',
 ]
 
+// Prefer stable arm64 agents; tulameen flaps offline mid-build
+// (InterruptedException → 5‑minute reconnect waits).
+String arm64NodeLabel = 'boys || fallgold'
+
 String[] distributions = [
 			// 'debian:bullseye', // Disabled: EOL; vitexsoftware image may be gone.
 			'debian:bookworm',
@@ -158,7 +162,8 @@ def scmVars = [:]
 // arm64 cannot reuse the amd64 checkout, and a fresh git@github.com clone
 // fails when the agent lacks github.com in known_hosts / deploy key.
 ['amd64', 'arm64'].each { archLabel ->
-    node(archLabel) {
+    def seedLabel = (archLabel == 'arm64') ? arm64NodeLabel : archLabel
+    node(seedLabel) {
         ansiColor('xterm') {
             stage('SCM Checkout ' + archLabel) {
                 def root = nodeLocalRoot()
