@@ -8,11 +8,18 @@ export DEB_VERSION_UPSTREAM
 %:
 	dh $@
 
+override_dh_auto_clean:
+	# Do not invoke the out-of-tree kbuild Makefile: packaging hosts often
+	# lack /lib/modules/$$(uname -r)/build. DKMS builds on the target.
+
 override_dh_auto_build:
 	# Sources are built by DKMS on the target system.
 
 override_dh_auto_install:
 	# Installation handled by dh_dkms + *.install
+
+override_dh_auto_test:
+	# No package-time tests; module is verified via DKMS on install.
 
 override_dh_dkms:
 	dh_dkms -pep800-dkms -V $(DEB_VERSION_UPSTREAM)

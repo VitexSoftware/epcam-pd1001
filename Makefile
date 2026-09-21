@@ -9,7 +9,12 @@ all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean:
-	$(MAKE) -C $(KDIR) M=$(PWD) clean
+	@if [ -d "$(KDIR)" ]; then \
+		$(MAKE) -C $(KDIR) M=$(PWD) clean; \
+	else \
+		rm -f *.o *.ko *.mod *.mod.c .*.cmd Module.symvers modules.order; \
+		rm -rf .tmp_versions; \
+	fi
 
 install:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
