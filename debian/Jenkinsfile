@@ -9,10 +9,12 @@ String[] architectures = [
 ]
 
 // Prefer stable arm64 agents; tulameen flaps offline mid-build
-// (InterruptedException → 5‑minute reconnect waits).
+// (InterruptedException → 5‑minute reconnect waits). fallgold's dockerd
+// dies under parallel load and leaves a stale socket that start cannot
+// revive — pin to boys until that host is hardened.
 // Parallel docker.inside storms also kill dockerd on the Pi fleet —
 // see ensureDocker() + lock(docker-sock-*) below.
-String arm64NodeLabel = 'arm64 && !tulameen'
+String arm64NodeLabel = 'arm64 && boys && !tulameen && !fallgold'
 
 String[] distributions = [
 			// 'debian:bullseye', // Disabled: EOL; vitexsoftware image may be gone.
@@ -188,6 +190,7 @@ def withDockerContainer(image, String volumeArgs, Closure body) {
 // --- end node-local workspace isolation -----------------------------------
 
 properties([
+    disableConcurrentBuilds(),
     copyArtifactPermission('*'),
     buildBlocker(
         useBuildBlocker: true,
